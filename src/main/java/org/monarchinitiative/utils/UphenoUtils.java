@@ -30,10 +30,13 @@ public class UphenoUtils {
         for(String relation:relations) {
             log("Computing "+relation+" relations");
             switch (relation) {
-                case "has_phenotype_affecting":
-                    generated_axioms.addAll(adding_has_phenotype_affecting(o, phenotypes));
+                case "UPHENO:0000001": // has_phenotype_affecting
+                    generated_axioms.addAll(adding_has_phenotype_affecting(o, phenotypes, relation));
                     break;
-                case "has_phenotypic_orthologue":
+                case "UPHENO:0000003": // has_associated_entity
+                    generated_axioms.addAll(adding_has_phenotype_affecting(o, phenotypes, relation));
+                    break;
+                case "UPHENO:0000002": // has_phenotypic_analogue
                     generated_axioms.addAll(adding_has_phenotypic_orthologue(o, phenotypes));
                     break;
                 default:
@@ -81,7 +84,7 @@ public class UphenoUtils {
         return add;
     }
 
-    private static Set<OWLAxiom> adding_has_phenotype_affecting(OWLOntology o, Set<OWLClass> phenotypes) {
+    private static Set<OWLAxiom> adding_has_phenotype_affecting(OWLOntology o, Set<OWLClass> phenotypes, String relation) {
         Set<OWLAxiom> add = new HashSet<>();
         for(OWLAxiom ax:o.getAxioms(AxiomType.EQUIVALENT_CLASSES)) {
             OWLEquivalentClassesAxiom eq = (OWLEquivalentClassesAxiom)ax;
@@ -93,7 +96,7 @@ public class UphenoUtils {
                         OWLObjectSomeValuesFrom ce = (OWLObjectSomeValuesFrom) cein;
                         if (!ce.getProperty().isAnonymous()) {
                             if (ce.getProperty().asOWLObjectProperty().equals(Entities.haspart)) {
-                                if (processHasPart(add, named, ce)) break;
+                                if (processHasPart(add, named, ce, relation)) break;
                             }
                         }
                     }
@@ -103,7 +106,7 @@ public class UphenoUtils {
         return add;
     }
 
-    private static boolean processHasPart(Set<OWLAxiom> add, OWLClass named, OWLObjectSomeValuesFrom ce) {
+    private static boolean processHasPart(Set<OWLAxiom> add, OWLClass named, OWLObjectSomeValuesFrom ce, String upheno_relation) {
         if (ce.getFiller() instanceof OWLObjectIntersectionOf) {
             OWLObjectIntersectionOf has_part_intersection = (OWLObjectIntersectionOf)ce.getFiller();
             for(OWLClassExpression has_part_intersection_operand:has_part_intersection.getOperands()) {
@@ -116,18 +119,24 @@ public class UphenoUtils {
                             if (!bearer_filler.equals(df.getOWLThing()) && !bearer_filler.equals(df.getOWLNothing())) {
                                 OWLObjectSomeValuesFrom relation = df.getOWLObjectSomeValuesFrom(Entities.has_phenotype_affecting, bearer_filler);
                                 OWLSubClassOfAxiom ax_new = df.getOWLSubClassOfAxiom(named, relation);
-                                add.add(ax_new);
+                                if (upheno_relation.equals("UPHENO:0000001")){
+                                    add.add(ax_new);
+                                }
                             }
                             if (bearer_expression.isAnonymous()) {
                                 for (OWLClass cbearer : bearer_expression.getClassesInSignature()) {
                                     OWLObjectSomeValuesFrom relation = df.getOWLObjectSomeValuesFrom(Entities.has_associated_entity, cbearer);
                                     OWLSubClassOfAxiom ax_new = df.getOWLSubClassOfAxiom(named, relation);
-                                    add.add(ax_new);
+                                    if (upheno_relation.equals("UPHENO:0000003")){
+                                        add.add(ax_new);
+                                    }
                                 }
                             } else {
                                 OWLObjectSomeValuesFrom relation = df.getOWLObjectSomeValuesFrom(Entities.has_associated_entity, bearer_expression.asOWLClass());
                                 OWLSubClassOfAxiom ax_new = df.getOWLSubClassOfAxiom(named, relation);
-                                add.add(ax_new);
+                                if (upheno_relation.equals("UPHENO:0000003")){
+                                    add.add(ax_new);
+                                }
                             }
                         }
                     }

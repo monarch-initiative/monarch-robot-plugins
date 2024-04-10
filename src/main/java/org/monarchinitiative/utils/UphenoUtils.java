@@ -9,11 +9,16 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Hello world!
  */
 public class UphenoUtils {
+
+    private static final Logger logger = LoggerFactory.getLogger(UphenoUtils.class);
+
     private final static OWLDataFactory df = OWLManager.getOWLDataFactory();
 
     /*
@@ -27,6 +32,7 @@ public class UphenoUtils {
 
     public static Set<OWLAxiom> augment_relations(OWLOntology o, Collection<String> relations, Set<OWLClass> phenotypes) throws IOException, OWLOntologyCreationException {
         Set<OWLAxiom> generated_axioms = new HashSet<>();
+        log("Augment relations...");
         for(String relation:relations) {
             log("Computing "+relation+" relations");
             switch (relation) {
@@ -40,6 +46,7 @@ public class UphenoUtils {
                     generated_axioms.addAll(adding_has_phenotypic_orthologue(o, phenotypes));
                     break;
                 default:
+                    UphenoUtils.logger.error("Unknown relation: "+relation);
                     break;
             }
         }
@@ -85,6 +92,7 @@ public class UphenoUtils {
     }
 
     private static Set<OWLAxiom> adding_has_phenotype_affecting(OWLOntology o, Set<OWLClass> phenotypes, String relation) {
+        log("Processing "+o.getAxioms(AxiomType.EQUIVALENT_CLASSES).size()+" equivalent class axioms.");
         Set<OWLAxiom> add = new HashSet<>();
         for(OWLAxiom ax:o.getAxioms(AxiomType.EQUIVALENT_CLASSES)) {
             OWLEquivalentClassesAxiom eq = (OWLEquivalentClassesAxiom)ax;
@@ -104,6 +112,19 @@ public class UphenoUtils {
             }
         }
         return add;
+    }
+
+    public static Set<OWLClassExpression> getDescendants(OWLOntology ontology, OWLClassExpression clazz, Set<OWLClassExpression> visited) {
+        Set<OWLClassExpression> descendants = new HashSet<>();
+        ontology.getAxioms(AxiomType.SUBCLASS_OF).stream()
+                .filter(axiom -> axiom.getSuperClass().equals(clazz))
+                .map(OWLSubClassOfAxiom::getSubClass)
+                .filter(subClass -> !subClass.isOWLNothing() && visited.add(subClass))
+                .forEach(subClass -> {
+                    descendants.add(subClass);
+                    descendants.addAll(getDescendants(ontology, subClass, visited));
+                });
+        return descendants;
     }
 
     private static boolean processHasPart(Set<OWLAxiom> add, OWLClass named, OWLObjectSomeValuesFrom ce, String upheno_relation) {
@@ -156,7 +177,8 @@ public class UphenoUtils {
     }
 
     private static void log(Object o) {
-        System.out.println(o.toString());
+        UphenoUtils.logger.info(o.toString());
+        //System.out.println(o.toString());
     }
 
 

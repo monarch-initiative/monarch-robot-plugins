@@ -10,22 +10,26 @@ import org.monarchinitiative.utils.UphenoUtils;
 import org.obolibrary.robot.CommandLineHelper;
 import org.obolibrary.robot.CommandState;
 import org.obolibrary.robot.IOHelper;
-import org.obolibrary.robot.OntologyHelper;
-import org.semanticweb.owlapi.model.AxiomType;
+import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.IRI;
 import org.semanticweb.owlapi.model.OWLAxiom;
 import org.semanticweb.owlapi.model.OWLClass;
 import org.semanticweb.owlapi.model.OWLClassExpression;
+import org.semanticweb.owlapi.model.OWLDataFactory;
 import org.semanticweb.owlapi.model.OWLEntity;
 import org.semanticweb.owlapi.model.OWLObject;
 import org.semanticweb.owlapi.model.OWLOntology;
-import org.semanticweb.owlapi.model.OWLSubClassOfAxiom;
+import org.semanticweb.owlapi.reasoner.OWLReasoner;
+import org.semanticweb.owlapi.reasoner.structural.StructuralReasonerFactory;
 
 /**
  * The uPheno relationship toolkit enables adding relationships 
  * to an ontology based on logical EQ definition
  */
 public class UphenoAugmentCommand extends BasePlugin {
+
+
+    OWLDataFactory dataFactory = OWLManager.getOWLDataFactory();
 
     public UphenoAugmentCommand() {
         super("extract-upheno-relations", "Adding content into phenotype ontologies based on EQ logical definitions.",
@@ -35,19 +39,6 @@ public class UphenoAugmentCommand extends BasePlugin {
         options.addOption("T", "term-file", true, "load terms from a file");
         options.addOption("p", "root-phenotype", true, "select a single root phenotype to extract");
         options.addOption("P", "root-phenotype-file", true, "a file with root phenotype terms to extract");
-    }
-
-    private Set<OWLClassExpression> getDescendants(OWLOntology ontology, OWLClassExpression clazz, Set<OWLClassExpression> visited) {
-        Set<OWLClassExpression> descendants = new HashSet<>();
-        ontology.getAxioms(AxiomType.SUBCLASS_OF).stream()
-                .filter(axiom -> axiom.getSuperClass().equals(clazz))
-                .map(OWLSubClassOfAxiom::getSubClass)
-                .filter(subClass -> !subClass.isOWLNothing() && visited.add(subClass))
-                .forEach(subClass -> {
-                    descendants.add(subClass);
-                    descendants.addAll(getDescendants(ontology, subClass, visited));
-                });
-        return descendants;
     }
 
     /**
@@ -67,24 +58,33 @@ public class UphenoAugmentCommand extends BasePlugin {
     Set<OWLObject> objects = new HashSet<>();
     IOHelper ioHelper = CommandLineHelper.getIOHelper(line);
     if (line.hasOption("term") || line.hasOption("term-file")) {
+        
       Set<IRI> entityIRIs = CommandLineHelper.getTerms(ioHelper, line, "term", "term-file");
       if (!entityIRIs.isEmpty()) {
-        objects.addAll(OntologyHelper.getEntities(ontology, entityIRIs));
+        Set<OWLEntity> entities = entityIRIs.stream()
+                        .map(iri -> dataFactory.getOWLClass(iri))
+                        .collect(Collectors.toSet());
+        objects.addAll(entities);
       }
     }
     if (line.hasOption("root-phenotype") || line.hasOption("root-phenotype-file")) {
         Set<IRI> entityIRIs = CommandLineHelper.getTerms(ioHelper, line, "root-phenotype", "root-phenotype-file");
         if (!entityIRIs.isEmpty()) {
-            Set<OWLEntity> roots = OntologyHelper.getEntities(ontology, entityIRIs);
+            Set<OWLEntity> roots = entityIRIs.stream()
+                        .map(iri -> dataFactory.getOWLClass(iri))
+                        .collect(Collectors.toSet());
             Set<OWLClass> root_classes = roots.stream()
                                 .filter(entity -> entity instanceof OWLClass)
                                 .map(entity -> (OWLClass) entity)
                                 .collect(Collectors.toSet());
             objects.addAll(root_classes);
             Set<OWLClassExpression> descendants = new HashSet<>();
-            Set<OWLClassExpression> visited = new HashSet<>();
+            StructuralReasonerFactory reasonerFactory = new StructuralReasonerFactory();
+            OWLReasoner reasoner = reasonerFactory.createReasoner(ontology);
             for (OWLClass root : root_classes) {
-            descendants.addAll(getDescendants(ontology, root, visited));
+                descendants.addAll(reasoner.getSubClasses(root, false).getFlattened());
+                //The below is too slow with huge ontologies.
+                //descendants.addAll(UphenoUtils.getDescendants(ontology, root, visited));
             }
             Set<OWLClass> descendant_classes = descendants.stream()
                 .filter(entity -> entity instanceof OWLClass)

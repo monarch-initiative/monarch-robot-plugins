@@ -1,1 +1,2 @@
 org.monarchinitiative.robot.UphenoAugmentCommand
+org.monarchinitiative.robot.uPhenoOBABridgeCommand

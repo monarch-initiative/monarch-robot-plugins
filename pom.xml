@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.monarch-initiative</groupId>
   <artifactId>monarch-robot-extensions</artifactId>
-  <version>0.0.1</version>
+  <version>0.0.2</version>
   <name>ROBOT Custom Commands my Monarch</name>
 
   <dependencies>
